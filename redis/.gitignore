@@ -1,0 +1,30 @@
+# --- Build Artifacts ---
+dist-newstyle/
+.stack-work/
+.ghc.environment.*
+
+# --- Executables and Libraries ---
+# (Usually covered by dist-newstyle, but good for local scripts)
+*.o
+*.hi
+*.hie
+*.chi
+*.chs.h
+*.dyn_o
+*.dyn_hi
+
+# --- Project Configuration ---
+# Only ignore if you want users to generate their own cabal.project.local
+cabal.project.local
+cabal.project.local~
+cabal.project.rescan
+
+# --- Editor & IDE Files ---
+.hls/
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Documentation ---
+dist-newstyle/build/**/doc/
