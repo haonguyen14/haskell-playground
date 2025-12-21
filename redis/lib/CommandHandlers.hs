@@ -3,7 +3,7 @@
 module CommandHandlers
   ( KVStore (..),
     Storage (..),
-    KVDatabase,
+    KVOp,
     setKV,
     getKV,
     setH,
@@ -13,6 +13,7 @@ module CommandHandlers
   )
 where
 
+import Control.Monad.Except (ExceptT)
 import Control.Monad.State
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as HashMap
@@ -26,28 +27,30 @@ data Storage = Storage
   }
   deriving (Show)
 
-type KVDatabase a = State Storage a
+type KVOp a = ExceptT String (State Storage) a
 
-ping :: Value -> KVDatabase Value
+ping :: Value -> KVOp Value
 ping (SimpleString msg) = return $ SimpleString msg
-ping _ = return $ SimpleError "ERR PING message must be a Simple String"
+ping _ = error "Err invalid PING command"
 
-setKV :: Value -> Value -> KVDatabase Value
+setKV :: Value -> Value -> KVOp Value
 setKV (BulkString (Just (_, key))) value = do
   Storage {kvStore, hStore} <- get
   let KVStore kv = kvStore
    in put $ Storage {kvStore = KVStore (HashMap.insert key value kv), hStore}
   return $ SimpleString "OK"
-setKV _ _ = return . SimpleError $ "Err invalid key for SET command"
+setKV _ _ = error "Err invalid key for SET command"
 
-getKV :: Value -> KVDatabase (Maybe Value)
+getKV :: Value -> KVOp Value
 getKV v
   | BulkString (Just (_, key)) <- v = do
-      Storage {kvStore} <- get
-      let KVStore kv = kvStore in return $ HashMap.lookup key kv
-  | otherwise = return . Just . SimpleError $ "Err invalid key for GET commadn"
+      Storage {kvStore = KVStore kv} <- get
+      case HashMap.lookup key kv of
+        Just value -> return value
+        _ -> return Null
+  | otherwise = error "Err invalid key for GET commadn"
 
-setH :: Value -> Value -> Value -> KVDatabase Value
+setH :: Value -> Value -> Value -> KVOp Value
 setH tbl key value
   | (BulkString (Just (_, idx))) <- tbl,
     (BulkString (Just (_, k))) <- key = do
@@ -56,22 +59,24 @@ setH tbl key value
           kv' = HashMap.insert idx (KVStore (HashMap.insert k value hm)) kv
        in put $ Storage {kvStore, hStore = KVStore kv'}
       return $ SimpleString "OK"
-  | otherwise = return . SimpleError $ "Err invalid key for HSET command"
+  | otherwise = error "Err invalid key for HSET command"
 
-getH :: Value -> Value -> KVDatabase (Maybe Value)
+getH :: Value -> Value -> KVOp Value
 getH tbl key
   | (BulkString (Just (_, idx))) <- tbl,
     (BulkString (Just (_, k))) <- key = do
       Storage {hStore = KVStore kv} <- get
       let KVStore hm = HashMap.lookupDefault (KVStore HashMap.empty) idx kv
-       in return $ HashMap.lookup k hm
-  | otherwise = return . Just . SimpleError $ "Err invalid key for HGET command"
+      case HashMap.lookup k hm of
+        Just v -> return v
+        _ -> return Null
+  | otherwise = error "Err invalid key for HGET command"
 
-getAllH :: Value -> KVDatabase (Either Value (Maybe [(BS.ByteString, Value)]))
+getAllH :: Value -> KVOp [(BS.ByteString, Value)]
 getAllH tbl
   | BulkString (Just (_, idx)) <- tbl = do
       Storage {hStore = KVStore kv} <- get
       case HashMap.lookup idx kv of
-        Just (KVStore hm) -> return . Right . Just $ HashMap.toList hm
-        _ -> return . Right $ Nothing
-  | otherwise = return . Left . SimpleError $ "Err invalid key for HGETALL command"
+        Just (KVStore hm) -> return $ HashMap.toList hm
+        _ -> return []
+  | otherwise = error "Err invalid key for HGETALL command"

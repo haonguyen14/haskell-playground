@@ -4,11 +4,11 @@ module Main where
 
 import CommandHandlers
 import Control
+import Control.Monad.Except (runExceptT)
 import Control.Monad.State
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as HashMap
 import Data.Traversable (mapAccumL)
-import Data.Tuple (swap)
 import Resp
 
 initStorage :: Storage
@@ -17,9 +17,9 @@ initStorage = Storage {kvStore = KVStore HashMap.empty, hStore = KVStore HashMap
 executeMultipleCommands :: [BS.ByteString] -> [Value]
 executeMultipleCommands xs = snd $ mapAccumL accF initStorage xs
   where
-    accF s bs = swap $ case execute bs of
-      Right m -> runState m s
-      Left e -> (SimpleError e, s)
+    accF s bs =
+      let (res, s') = runState (runExceptT $ execute bs) s
+       in (s', either SimpleError id res)
 
 main :: IO ()
 main = do

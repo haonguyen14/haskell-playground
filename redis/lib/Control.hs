@@ -7,49 +7,50 @@ module Control
   )
 where
 
-import CommandHandlers (KVDatabase, getKV, ping, setKV, setH, getH, getAllH)
+import CommandHandlers (KVOp, getAllH, getH, getKV, ping, setH, setKV)
 import qualified Data.ByteString.Char8 as BS
-import Resp (ToResp, toResp, Value (..), parseResp)
+import Resp (Value (..), bulkString, parseResp)
 import Text.Parsec
 
 data Command a where
-  Ping :: Value -> Command Value
-  Set :: Value -> Value -> Command Value
-  Get :: Value -> Command (Maybe Value)
-  SetH :: Value -> Value -> Value -> Command Value
-  GetH :: Value -> Value -> Command (Maybe Value)
-  GetAllH :: Value -> Command (Either Value (Maybe [(BS.ByteString, Value)]))
+  Ping :: Value -> Command (KVOp Value)
+  Set :: Value -> Value -> Command (KVOp Value)
+  Get :: Value -> Command (KVOp Value)
+  SetH :: Value -> Value -> Value -> Command (KVOp Value)
+  GetH :: Value -> Value -> Command (KVOp Value)
+  GetAllH :: Value -> Command (KVOp [(BS.ByteString, Value)])
 
-data SomeCommand = forall a. (ToResp a) => SomeCommand (Command a)
+data SomeCommand = forall a. SomeCommand (Command a)
 
-getCommandHandler :: BS.ByteString -> [Value] -> Either String SomeCommand
-getCommandHandler "PING" [msg] = Right $ SomeCommand (Ping msg)
-getCommandHandler "SET" [key, value] = Right $ SomeCommand (Set key value)
-getCommandHandler "GET" [key] = Right $ SomeCommand (Get key)
-getCommandHandler "HSET" [tbl, key, value] = Right $ SomeCommand (SetH tbl key value)
-getCommandHandler "HGET" [tbl, key] = Right $ SomeCommand (GetH tbl key)
-getCommandHandler "HGETALL" [tbl] = Right $ SomeCommand (GetAllH tbl)
-getCommandHandler cmd _ = Left $ "ERR unknown command '" ++ BS.unpack cmd ++ "'"
+getCommandHandler :: BS.ByteString -> [Value] -> KVOp SomeCommand
+getCommandHandler "PING" [msg] = return $ SomeCommand (Ping msg)
+getCommandHandler "SET" [key, value] = return $ SomeCommand (Set key value)
+getCommandHandler "GET" [key] = return $ SomeCommand (Get key)
+getCommandHandler "HSET" [tbl, key, value] = return $ SomeCommand (SetH tbl key value)
+getCommandHandler "HGET" [tbl, key] = return $ SomeCommand (GetH tbl key)
+getCommandHandler "HGETALL" [tbl] = return $ SomeCommand (GetAllH tbl)
+getCommandHandler cmd _ = error $ "ERR unknown command '" ++ BS.unpack cmd ++ "'"
 
-executeCommand' :: Command a -> KVDatabase a
-executeCommand' (Ping msg) = ping  msg
-executeCommand' (Set key value) = setKV key value
-executeCommand' (Get key) = getKV key
-executeCommand' (SetH tbl key value) = setH tbl key value
-executeCommand' (GetH tbl key) = getH tbl key
-executeCommand' (GetAllH tbl) = getAllH tbl
+executeCommand :: SomeCommand -> KVOp Value
+executeCommand (SomeCommand cmd) = case cmd of
+  Ping msg -> ping msg
+  Set key value -> setKV key value
+  Get key -> getKV key
+  SetH tbl key value -> setH tbl key value
+  GetH tbl key -> getH tbl key
+  GetAllH tbl -> toResp <$> getAllH tbl
 
-executeCommand :: SomeCommand -> KVDatabase Value
-executeCommand (SomeCommand cmd) = toResp <$> executeCommand' cmd
-
-parseInput :: BS.ByteString -> Either String (BS.ByteString, [Value])
+parseInput :: BS.ByteString -> KVOp (BS.ByteString, [Value])
 parseInput s = case parse parseResp "" s of
-  Right (Array _ (BulkString (Just (_, cmd)) : args)) -> Right (cmd, args)
-  Left err -> Left $ show err
-  _ -> Left "Expecting RESP arrays"
+  Right (Array _ (BulkString (Just (_, cmd)) : args)) -> return (cmd, args)
+  Left err -> error $ "ERR " ++ show err
+  _ -> error "Expecting RESP arrays"
 
-execute :: BS.ByteString -> Either String (KVDatabase Value)
+execute :: BS.ByteString -> KVOp Value
 execute s = do
   (commandName, args) <- parseInput s
   handler <- getCommandHandler commandName args
-  return $ executeCommand handler
+  executeCommand handler
+
+toResp :: [(BS.ByteString, Value)] -> Value
+toResp xs = Array (fromIntegral $ 2 * length xs) $ concatMap (\(k, v) -> [bulkString k, v]) xs

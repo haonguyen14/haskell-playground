@@ -2,8 +2,6 @@
 
 module Resp
   ( Value (..),
-    ToResp,
-    toResp,
     parseResp,
     bulkString,
   )
@@ -86,28 +84,3 @@ bulkString :: BS.ByteString -> Value
 bulkString a = BulkString $ Just (l, a)
   where
     l = fromIntegral $ BS.length a
-
-class ToResp a where
-  toResp :: a -> Value
-
-instance ToResp Value where
-  toResp = id
-
-instance ToResp (Maybe Value) where
-  toResp Nothing = Null
-  toResp (Just v) = v
-
-instance ToResp (Either Value (Maybe [(BS.ByteString, Value)])) where
-  toResp (Left err) = err
-  toResp (Right Nothing) = Null
-  toResp (Right (Just kvs)) =
-    Array
-      (fromIntegral $ length kvs * 2)
-      ( concatMap
-          ( \(k, v) ->
-              [ bulkString k,
-                v
-              ]
-          )
-          kvs
-      )
