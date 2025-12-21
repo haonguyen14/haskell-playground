@@ -72,7 +72,7 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:    
-        base ^>=4.17.2.1,
+        base >= 4.17 && < 4.20,
         parsec,
         mtl,
         unordered-containers,
@@ -99,7 +99,7 @@ executable redis
 
     -- Other library packages from which modules are imported.
     build-depends:
-        base ^>=4.17.2.1,
+        base >= 4.17 && < 4.20,
         bytestring,
         parsec,
         mtl,
