@@ -7,13 +7,19 @@ import Control
 import Control.Monad.State
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as HashMap
+import Data.Traversable (mapAccumL)
+import Data.Tuple (swap)
 import Resp
 
-executeMultipleCommands :: Storage -> [BS.ByteString] -> [Value]
-executeMultipleCommands _ [] = []
-executeMultipleCommands s (x : xs) = case execute x of
-  Right m -> let (output, s') = runState m s in output : executeMultipleCommands s' xs
-  Left err -> SimpleError err : executeMultipleCommands s xs
+initStorage :: Storage
+initStorage = Storage {kvStore = KVStore HashMap.empty, hStore = KVStore HashMap.empty}
+
+executeMultipleCommands :: [BS.ByteString] -> [Value]
+executeMultipleCommands xs = snd $ mapAccumL accF initStorage xs
+  where
+    accF s bs = swap $ case execute bs of
+      Right m -> runState m s
+      Left e -> (SimpleError e, s)
 
 main :: IO ()
 main = do
@@ -29,10 +35,5 @@ main = do
           "*2\r\n$7\r\nHGETALL\r\n$5\r\ntable\r\n",
           "*2\r\n$7\r\nHGETALL\r\n$7\r\nunknown\r\n"
         ]
-      initState =
-        Storage
-          { kvStore = KVStore HashMap.empty,
-            hStore = KVStore HashMap.empty
-          }
-      results = executeMultipleCommands initState (map BS.pack commands)
+      results = executeMultipleCommands (map BS.pack commands)
   mapM_ print results

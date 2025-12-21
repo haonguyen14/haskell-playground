@@ -70,7 +70,7 @@ getH tbl key
 getAllH :: Value -> KVDatabase (Either Value (Maybe [(BS.ByteString, Value)]))
 getAllH tbl
   | BulkString (Just (_, idx)) <- tbl = do
-      Storage { hStore = KVStore kv } <- get
+      Storage {hStore = KVStore kv} <- get
       case HashMap.lookup idx kv of
         Just (KVStore hm) -> return . Right . Just $ HashMap.toList hm
         _ -> return . Right $ Nothing
