@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Resp
-  ( Value (..),
-    parseResp,
-    bulkString,
-  )
+module Resp (
+  Value (..),
+  parseResp,
+  bulkString,
+)
 where
 
 import qualified Data.ByteString.Char8 as BS
@@ -82,5 +82,5 @@ parseArray = do
 
 bulkString :: BS.ByteString -> Value
 bulkString a = BulkString $ Just (l, a)
-  where
-    l = fromIntegral $ BS.length a
+ where
+  l = fromIntegral $ BS.length a

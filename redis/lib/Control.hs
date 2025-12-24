@@ -3,9 +3,9 @@
 
 {-# HLINT ignore "Use lambda-case" #-}
 
-module Control
-  ( execute,
-  )
+module Control (
+  execute,
+)
 where
 
 import CommandHandlers (KVOp, getAllH, getH, getKV, ping, setH, setKV)
@@ -17,33 +17,39 @@ import Text.Parsec
 commandHandlers :: HashMap.HashMap BS.ByteString ([Value] -> KVOp Value)
 commandHandlers =
   HashMap.fromList
-    [ ( "PING",
-        \args -> case args of
+    [
+      ( "PING"
+      , \args -> case args of
           [msg] -> ping msg
           _ -> error "ERR wrong number of arguments for 'PING' command"
-      ),
-      ( "SET",
-        \args -> case args of
+      )
+    ,
+      ( "SET"
+      , \args -> case args of
           [key, value] -> setKV key value
           _ -> error "ERR wrong number of arguments for 'SET' command"
-      ),
-      ( "GET",
-        \args -> case args of
+      )
+    ,
+      ( "GET"
+      , \args -> case args of
           [key] -> getKV key
           _ -> error "ERR wrong number of arguments for 'GET' command"
-      ),
-      ( "HSET",
-        \args -> case args of
+      )
+    ,
+      ( "HSET"
+      , \args -> case args of
           [tbl, key, value] -> setH tbl key value
           _ -> error "ERR wrong number of arguments for 'HSET' command"
-      ),
-      ( "HGET",
-        \args -> case args of
+      )
+    ,
+      ( "HGET"
+      , \args -> case args of
           [tbl, key] -> getH tbl key
           _ -> error "ERR wrong number of arguments for 'HGET' command"
-      ),
-      ( "HGETALL",
-        \args -> case args of
+      )
+    ,
+      ( "HGETALL"
+      , \args -> case args of
           [tbl] -> toResp <$> getAllH tbl
           _ -> error "ERR wrong number of arguments for 'HGETALL' command"
       )
