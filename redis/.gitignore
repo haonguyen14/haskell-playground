@@ -28,3 +28,5 @@ cabal.project.rescan
 
 # --- Documentation ---
 dist-newstyle/build/**/doc/
+
+GEMINI.md
