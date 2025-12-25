@@ -4,11 +4,15 @@ module Main where
 
 import CommandHandlers
 import Control
+import Control.Concurrent (newMVar, takeMVar)
+import Control.Concurrent.Async (wait)
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State
 import qualified Data.ByteString.Char8 as BS
+import Data.Foldable (forM_)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Traversable (mapAccumL)
+import Engine (updateStorageAsyncIO)
 import Resp
 
 initStorage :: Storage
@@ -35,5 +39,16 @@ main = do
           "*2\r\n$7\r\nHGETALL\r\n$5\r\ntable\r\n",
           "*2\r\n$7\r\nHGETALL\r\n$7\r\nunknown\r\n"
         ]
-      results = executeMultipleCommands (map BS.pack commands)
-  mapM_ print results
+
+  storage <- newMVar initStorage
+
+  asyncOps <- mapM (updateStorageAsyncIO storage . BS.pack) commands
+
+  forM_ asyncOps $ \async -> do
+    result <- wait async
+    print result
+
+  finalStorage <- takeMVar storage
+
+  putStrLn "----- Final Storage -----"
+  print finalStorage

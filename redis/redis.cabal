@@ -88,6 +88,8 @@ executable redis
     -- Import common warning flags.
     import:           warnings
 
+    other-modules:    Engine
+
     -- .hs or .lhs file containing the Main module.
     main-is:          Main.hs
 
@@ -104,7 +106,8 @@ executable redis
         parsec,
         mtl,
         unordered-containers,
-        redis
+        redis,
+        async
 
     -- Directories containing source files.
     hs-source-dirs:   app
