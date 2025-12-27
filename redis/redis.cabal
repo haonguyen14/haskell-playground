@@ -107,7 +107,8 @@ executable redis
         mtl,
         unordered-containers,
         redis,
-        async
+        async,
+        network
 
     -- Directories containing source files.
     hs-source-dirs:   app

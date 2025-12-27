@@ -1,10 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Resp (
-  Value (..),
-  parseResp,
-  bulkString,
-)
+module Resp
+  ( Value (..),
+    toByteString,
+    parseResp,
+    bulkString,
+  )
 where
 
 import qualified Data.ByteString.Char8 as BS
@@ -29,6 +31,16 @@ parseResp =
     <|> parseBoolean
     <|> parseNull
     <|> parseArray
+
+toByteString :: Value -> BS.ByteString
+toByteString (SimpleString s) = BS.pack $ "+" ++ s ++ "\r\n"
+toByteString (SimpleError e) = BS.pack $ "-" ++ e ++ "\r\n"
+toByteString (BulkString (Just (_, bs))) = BS.pack ("$" ++ show (BS.length bs) ++ "\r\n") `BS.append` bs `BS.append` "\r\n"
+toByteString (BulkString Nothing) = "$-1\r\n"
+toByteString (Integer i) = BS.pack $ ":" ++ show i ++ "\r\n"
+toByteString (Boolean b) = if b then "#t\r\n" else "#f\r\n"
+toByteString (Array l as) = BS.pack ("*" ++ show l ++ "\r\n") `BS.append` BS.concat (map toByteString as)
+toByteString Null = "_\r\n"
 
 rn :: Parsec BS.ByteString () String
 rn = string "\r\n"
@@ -82,5 +94,5 @@ parseArray = do
 
 bulkString :: BS.ByteString -> Value
 bulkString a = BulkString $ Just (l, a)
- where
-  l = fromIntegral $ BS.length a
+  where
+    l = fromIntegral $ BS.length a

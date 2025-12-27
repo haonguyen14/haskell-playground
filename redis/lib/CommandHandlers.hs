@@ -10,6 +10,7 @@ module CommandHandlers
     getH,
     getAllH,
     ping,
+    command,
   )
 where
 
@@ -31,6 +32,7 @@ type KVOp a = ExceptT String (State Storage) a
 
 ping :: Value -> KVOp Value
 ping (SimpleString msg) = return $ SimpleString msg
+ping msg@(BulkString (Just (_, _))) = return msg
 ping _ = throwError "Err invalid PING command"
 
 setKV :: Value -> Value -> KVOp Value
@@ -80,3 +82,6 @@ getAllH tbl
         Just (KVStore hm) -> return $ HashMap.toList hm
         _ -> return []
   | otherwise = throwError "Err invalid key for HGETALL command"
+
+command :: KVOp Value
+command = return $ SimpleError "-ERR unknown command 'COMMAND'"

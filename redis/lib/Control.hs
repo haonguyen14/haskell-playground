@@ -5,10 +5,11 @@
 
 module Control
   ( execute,
+    executeCommand,
   )
 where
 
-import CommandHandlers (KVOp, getAllH, getH, getKV, ping, setH, setKV)
+import CommandHandlers (KVOp, command, getAllH, getH, getKV, ping, setH, setKV)
 import Control.Monad.Except (throwError)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.HashMap.Strict as HashMap
@@ -47,7 +48,8 @@ commandHandlers =
         \args -> case args of
           [tbl] -> toResp <$> getAllH tbl
           _ -> throwError "ERR wrong number of arguments for 'HGETALL' command"
-      )
+      ),
+      ("COMMAND", const command)
     ]
 
 parseInput :: BS.ByteString -> KVOp (BS.ByteString, [Value])
@@ -59,7 +61,10 @@ parseInput s = case parse parseResp "" s of
 execute :: BS.ByteString -> KVOp Value
 execute s = do
   (commandName, args) <- parseInput s
-  HashMap.lookupDefault (\_ -> throwError "Unknown command") commandName commandHandlers args
+  executeCommand commandName args
+
+executeCommand :: BS.ByteString -> [Value] -> KVOp Value
+executeCommand commandName = HashMap.lookupDefault (\_ -> throwError $ "Unknown command: " ++ show commandName) commandName commandHandlers
 
 toResp :: [(BS.ByteString, Value)] -> Value
 toResp xs = Array (fromIntegral $ 2 * length xs) $ concatMap (\(k, v) -> [bulkString k, v]) xs

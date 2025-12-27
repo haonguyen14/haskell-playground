@@ -3,52 +3,56 @@
 module Main where
 
 import CommandHandlers
-import Control
-import Control.Concurrent (newMVar, takeMVar)
-import Control.Concurrent.Async (wait)
-import Control.Monad.Except (runExceptT)
-import Control.Monad.State
-import qualified Data.ByteString.Char8 as BS
-import Data.Foldable (forM_)
+import Control.Concurrent (forkFinally, newMVar)
+import Control.Monad (forever)
 import qualified Data.HashMap.Strict as HashMap
-import Data.Traversable (mapAccumL)
-import Engine (updateStorageAsyncIO)
-import Resp
+import Engine (executeCommands)
+import Network.Socket
+  ( AddrInfo (addrAddress, addrFamily, addrProtocol, addrSocketType),
+    AddrInfoFlag (AI_PASSIVE),
+    PortNumber,
+    SocketOption (NoDelay, ReuseAddr),
+    accept,
+    addrFlags,
+    bind,
+    close,
+    defaultHints,
+    getAddrInfo,
+    listen,
+    setSocketOption,
+    socket,
+  )
 
 initStorage :: Storage
 initStorage = Storage {kvStore = KVStore HashMap.empty, hStore = KVStore HashMap.empty}
 
-executeMultipleCommands :: [BS.ByteString] -> [Value]
-executeMultipleCommands xs = snd $ mapAccumL accF initStorage xs
-  where
-    accF s bs =
-      let (res, s') = runState (runExceptT $ execute bs) s
-       in (s', either SimpleError id res)
+portNumber :: PortNumber
+portNumber = 6379
 
 main :: IO ()
 main = do
-  let commands =
-        [ "*2\r\n$4\r\nPING\r\n+Hello\r\n",
-          "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n",
-          "*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n",
-          "*2\r\n$3\r\nGET\r\n$7\r\nunknown\r\n",
-          "*4\r\n$4\r\nHSET\r\n$5\r\ntable\r\n$3\r\nkey\r\n$5\r\nvalue\r\n",
-          "*4\r\n$4\r\nHSET\r\n$5\r\ntable\r\n$4\r\nkey2\r\n$5\r\nvalue\r\n",
-          "*3\r\n$4\r\nHGET\r\n$5\r\ntable\r\n$3\r\nkey\r\n",
-          "*3\r\n$4\r\nHGET\r\n$5\r\ntable\r\n$7\r\nunknown\r\n",
-          "*2\r\n$7\r\nHGETALL\r\n$5\r\ntable\r\n",
-          "*2\r\n$7\r\nHGETALL\r\n$7\r\nunknown\r\n"
-        ]
+  putStrLn "Starting Server..."
+  addrInfo <-
+    getAddrInfo
+      (Just (defaultHints {addrFlags = [AI_PASSIVE]}))
+      Nothing
+      (Just . show $ portNumber)
 
-  storage <- newMVar initStorage
+  let serverAddrInfo = head addrInfo
 
-  asyncOps <- mapM (updateStorageAsyncIO storage . BS.pack) commands
+  sock <- socket (addrFamily serverAddrInfo) (addrSocketType serverAddrInfo) (addrProtocol serverAddrInfo)
+  setSocketOption sock ReuseAddr 1
+  setSocketOption sock NoDelay 1
 
-  forM_ asyncOps $ \async -> do
-    result <- wait async
-    print result
+  bind sock (addrAddress serverAddrInfo)
+  listen sock 2
 
-  finalStorage <- takeMVar storage
+  putStrLn "Server is ready"
 
-  putStrLn "----- Final Storage -----"
-  print finalStorage
+  -- initialize a new in-memory storage
+  kvStorage <- newMVar initStorage
+
+  forever $ do
+    (conn, clientAddr) <- accept sock
+    putStrLn $ "Accepted connection from " ++ show clientAddr
+    forkFinally (executeCommands conn kvStorage) (\_ -> putStrLn "Connection Closed" >> close conn)
