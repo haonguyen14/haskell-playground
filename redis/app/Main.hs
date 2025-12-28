@@ -3,7 +3,8 @@
 module Main where
 
 import CommandHandlers
-import Control.Concurrent (forkFinally, newMVar)
+import Control.Concurrent (forkIO, newMVar)
+import Control.Exception (bracket)
 import Control.Monad (forever)
 import qualified Data.HashMap.Strict as HashMap
 import Engine (executeCommands)
@@ -51,7 +52,12 @@ main = do
 
   -- initialize a new in-memory storage
   kvStorage <- newMVar initStorage
+
   forever $ do
     (conn, clientAddr) <- accept sock
-    putStrLn $ "Accepted connection from " ++ show clientAddr
-    forkFinally (executeCommands conn kvStorage) (\_ -> putStrLn "Connection Closed" >> close conn)
+    putStrLn $ "New connection from " ++ show clientAddr
+    forkIO $ do
+      bracket
+        (return conn) -- acquire conn
+        (\c -> putStrLn "Closing connection" >> close c) -- safely close connection
+        (`executeCommands` kvStorage)
