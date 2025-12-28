@@ -51,7 +51,6 @@ main = do
 
   -- initialize a new in-memory storage
   kvStorage <- newMVar initStorage
-
   forever $ do
     (conn, clientAddr) <- accept sock
     putStrLn $ "Accepted connection from " ++ show clientAddr
